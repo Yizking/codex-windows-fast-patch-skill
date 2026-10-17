@@ -1,4 +1,4 @@
-const ENDPOINT = "ws://127.0.0.1:43123";
+const ENDPOINT = "ws://127.0.0.1:43123/ws";
 const state = {
   socket: null,
   nextId: 1,
@@ -199,7 +199,7 @@ async function startThread() {
 async function connect() {
   if (state.socket && state.socket.readyState <= WebSocket.OPEN) return;
   setConnection("offline", "Connecting...");
-  const socket = new WebSocket(ENDPOINT);
+  const socket = new WebSocket(ENDPOINT, "codex-jsonrpc-v1");
   state.socket = socket;
   socket.onopen = async () => {
     setConnection("ready", "Desktop connected");
@@ -286,10 +286,6 @@ $("new-thread").addEventListener("click", async () => {
 modelSelect.addEventListener("change", () => {
   renderReasoningOptions(modelById(modelSelect.value));
   renderSpeedOptions(modelById(modelSelect.value));
-});
-
-for (const tab of document.querySelectorAll(".mode-tab")) tab.addEventListener("click", () => {
-  document.querySelectorAll(".mode-tab").forEach((item) => item.classList.toggle("active", item === tab));
 });
 
 chrome.storage?.local?.get(["codexWorkModel", "codexWorkCwd", "codexWorkReasoning", "codexWorkSpeed"]).then((saved) => {

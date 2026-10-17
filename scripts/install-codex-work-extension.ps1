@@ -18,7 +18,7 @@ if ($Action -eq 'Status') {
     exit 1
   }
   $data = Get-Content -Raw -LiteralPath $manifest | ConvertFrom-Json
-  [pscustomobject]@{ name = $data.name; version = $data.version; path = $Destination; endpoint = "ws://127.0.0.1:$Port" } | ConvertTo-Json -Compress
+  [pscustomobject]@{ name = $data.name; version = $data.version; path = $Destination; endpoint = "ws://127.0.0.1:$Port/ws" } | ConvertTo-Json -Compress
   exit 0
 }
 

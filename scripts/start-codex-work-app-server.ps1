@@ -3,7 +3,8 @@ param(
   [ValidateSet('Start', 'Stop', 'Status')]
   [string]$Action = 'Start',
   [int]$Port = 43123,
-  [string]$WorkRoot = 'D:\CodexData\codex-work-bridge'
+  [string]$WorkRoot = 'D:\CodexData\codex-work-bridge',
+  [string]$ExtensionRoot = 'D:\CodexData\codex-work-extension'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -35,10 +36,26 @@ function Get-CodexCliPath {
 function Get-StatePaths {
   New-Item -ItemType Directory -Force -Path $WorkRoot | Out-Null
   return [pscustomobject]@{
-    Pid = Join-Path $WorkRoot 'app-server.pid'
-    StdOut = Join-Path $WorkRoot 'app-server.stdout.log'
-    StdErr = Join-Path $WorkRoot 'app-server.stderr.log'
+    Pid = Join-Path $WorkRoot 'bridge-server.pid'
+    StdOut = Join-Path $WorkRoot 'bridge-server.stdout.log'
+    StdErr = Join-Path $WorkRoot 'bridge-server.stderr.log'
   }
+}
+
+function Get-ExtensionId {
+  $manifestPath = Join-Path $ExtensionRoot 'manifest.json'
+  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Extension manifest is missing: $manifestPath" }
+  $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+  if ([string]::IsNullOrWhiteSpace([string]$manifest.key)) { throw 'The local extension manifest must contain a stable public key.' }
+  $publicKey = [Convert]::FromBase64String([string]$manifest.key)
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  try { $digest = $sha.ComputeHash($publicKey) } finally { $sha.Dispose() }
+  $builder = [System.Text.StringBuilder]::new()
+  for ($index = 0; $index -lt 16; $index++) {
+    [void]$builder.Append([char](97 + ($digest[$index] -shr 4)))
+    [void]$builder.Append([char](97 + ($digest[$index] -band 15)))
+  }
+  return $builder.ToString()
 }
 
 function Get-RecordedProcess {
@@ -57,13 +74,21 @@ function Test-AppServerHealth {
   } catch { return $false }
 }
 
+function Test-RecordedBridgeProcess {
+  param([object]$Process)
+  if (-not $Process) { return $false }
+  $commandLine = [string]$Process.CommandLine
+  return $commandLine -match 'run-codex-work-bridge\.ps1' -and $commandLine -match "-Port\s+$Port"
+}
+
 $paths = Get-StatePaths
 if ($Action -eq 'Status') {
   $process = Get-RecordedProcess $paths
   [pscustomobject]@{
-    endpoint = "ws://127.0.0.1:$Port"
-    healthy = Test-AppServerHealth
-    pid = if ($process) { [int]$process.ProcessId } else { $null }
+    endpoint = "ws://127.0.0.1:$Port/ws"
+    mode = 'origin-checked-stdio-bridge'
+    healthy = (Test-AppServerHealth) -and (Test-RecordedBridgeProcess $process)
+    pid = if (Test-RecordedBridgeProcess $process) { [int]$process.ProcessId } else { $null }
     executable = if ($process) { [string]$process.ExecutablePath } else { $null }
   } | ConvertTo-Json -Compress
   exit 0
@@ -73,41 +98,63 @@ if ($Action -eq 'Stop') {
   $process = Get-RecordedProcess $paths
   if (-not $process) {
     Remove-Item -LiteralPath $paths.Pid -Force -ErrorAction SilentlyContinue
-    Write-Host 'Codex Work app-server is not running.'
+    Write-Host 'Codex Work bridge is not running.'
     exit 0
   }
-  $commandLine = [string]$process.CommandLine
-  if ($commandLine -notmatch 'app-server' -or $commandLine -notmatch "43123|$Port") {
+  if (-not (Test-RecordedBridgeProcess $process)) {
     throw "Refusing to stop an unverified process (PID $($process.ProcessId))."
   }
-  Stop-Process -Id ([int]$process.ProcessId) -Force
+  try { Invoke-WebRequest -UseBasicParsing -Method Post -Uri "http://127.0.0.1:$Port/shutdown" -TimeoutSec 2 | Out-Null } catch {}
+  $processId = [int]$process.ProcessId
+  for ($attempt = 0; $attempt -lt 20; $attempt++) {
+    Start-Sleep -Milliseconds 150
+    if (-not (Get-Process -Id $processId -ErrorAction SilentlyContinue)) { break }
+  }
+  if (Get-Process -Id $processId -ErrorAction SilentlyContinue) {
+    & (Join-Path $env:WINDIR 'System32\taskkill.exe') /PID $processId /T /F | Out-Null
+  }
   Remove-Item -LiteralPath $paths.Pid -Force -ErrorAction SilentlyContinue
-  Write-Host 'Codex Work app-server stopped.'
+  Write-Host 'Codex Work bridge and its child app-server stopped.'
   exit 0
 }
 
-if (Test-AppServerHealth) {
-  Write-Host "Codex Work app-server already healthy at ws://127.0.0.1:$Port"
+if ((Test-AppServerHealth) -and (Test-RecordedBridgeProcess (Get-RecordedProcess $paths))) {
+  Write-Host "Codex Work origin-checked bridge already healthy at ws://127.0.0.1:$Port/ws"
   exit 0
+}
+if (Test-AppServerHealth) {
+  throw "Port $Port is already serving an unverified local service; it was left untouched. Choose another -Port."
 }
 
 $codex = Get-CodexCliPath
-$arguments = @('app-server', '--listen', "ws://127.0.0.1:$Port")
-$process = Start-Process -FilePath $codex -ArgumentList $arguments -WorkingDirectory $env:USERPROFILE -WindowStyle Hidden -RedirectStandardOutput $paths.StdOut -RedirectStandardError $paths.StdErr -PassThru
+$extensionId = Get-ExtensionId
+$bridgeScript = Join-Path $PSScriptRoot 'run-codex-work-bridge.ps1'
+$powershell = Join-Path $PSHOME 'powershell.exe'
+if (-not (Test-Path -LiteralPath $powershell -PathType Leaf)) {
+  $powershell = (Get-Command powershell.exe -ErrorAction Stop).Source
+}
+$arguments = @(
+  '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $bridgeScript + '"'),
+  '-Port', [string]$Port,
+  '-ExtensionId', $extensionId,
+  '-CodexCliPath', ('"' + $codex + '"'),
+  '-WorkRoot', ('"' + $WorkRoot + '"')
+)
+$process = Start-Process -FilePath $powershell -ArgumentList $arguments -WorkingDirectory $env:USERPROFILE -WindowStyle Hidden -RedirectStandardOutput $paths.StdOut -RedirectStandardError $paths.StdErr -PassThru
 Set-Content -LiteralPath $paths.Pid -Value $process.Id -Encoding ascii
 
 $deadline = (Get-Date).AddSeconds(20)
 do {
   Start-Sleep -Milliseconds 350
-  if (Test-AppServerHealth) {
-    Write-Host "Codex Work app-server ready: ws://127.0.0.1:$Port" -ForegroundColor Green
+  if ((Test-AppServerHealth) -and (Test-RecordedBridgeProcess (Get-RecordedProcess $paths))) {
+    Write-Host "Codex Work origin-checked bridge ready: ws://127.0.0.1:$Port/ws" -ForegroundColor Green
     exit 0
   }
   $process.Refresh()
   if ($process.HasExited) {
     $tail = if (Test-Path -LiteralPath $paths.StdErr) { (Get-Content -LiteralPath $paths.StdErr -Tail 8) -join ' ' } else { '' }
-    throw "Codex app-server exited before health check. $tail"
+    throw "Codex Work bridge exited before health check. $tail"
   }
 } while ((Get-Date) -lt $deadline)
 
-throw "Timed out waiting for Codex app-server health. See $($paths.StdErr)."
+throw "Timed out waiting for Codex Work bridge health. See $($paths.StdErr)."

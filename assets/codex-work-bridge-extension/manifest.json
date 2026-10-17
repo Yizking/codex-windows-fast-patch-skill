@@ -2,6 +2,7 @@
   "manifest_version": 3,
   "name": "Codex Desktop Work",
   "version": "0.1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArnFIRBOPbterr3YVXNKfWdB6L13zkH3sADII34uVIzahpepHeooNGJpukjx6rC0u+E1zgMU3xIZmL2TaAIOKCZRAqcwRGAoxd2E1uDjVuQ9SOeidMQw27FIeSRpp76G7hHuvitC4nDJBHhYe4kAQz0z63jEVJWxSBv7GTm2nPTXN07kzavJOmZfpR/Aia/Er/ghXOwneq62gNDo4V5F//zc+5bPPLxO+Qp0T4EcmwbvTKlMvS/Ahc885iqIiDcc8uefgOz+gQoC++5BeaS0UzbaIlQNnk5CvTW+jJnk+7Vqmsi+qqUMqd27rOwkTp9NSsxnpsSfjTXQr31XKsgHyWwIDAQAB",
   "description": "Use the local Codex Desktop app-server and its configured model provider.",
   "minimum_chrome_version": "116",
   "permissions": [

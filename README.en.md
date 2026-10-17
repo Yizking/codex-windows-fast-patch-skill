@@ -80,7 +80,14 @@ The current official extension implements Work as a `chatgpt.com` web-session if
 powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\install-codex-work-extension.ps1"
 ```
 
-The script leaves the official extension, browser profile, `auth.json`, and `config.toml` untouched. It starts a loopback app-server and writes a separate unpacked extension under the D: drive. On the first install, enable Developer mode at `chrome://extensions` and choose the reported directory. The local sidebar uses the Desktop provider, model catalog, reasoning options, and Default/Fast/Ultrafast tiers without a second `chatgpt.com` login.
+The script leaves the official extension, browser profile, `auth.json`, and `config.toml` untouched. It writes a separate unpacked extension under the D: drive and starts a local relay. The official Work page is a ChatGPT web-session iframe and cannot inherit Desktop Codex's third-party API configuration. This separate sidebar connects to a relay bound only to `127.0.0.1`; the relay checks the fixed extension Origin and `codex-jsonrpc-v1` subprotocol, then launches `codex app-server` over stdio as the current Windows user. The app-server uses that user's existing Desktop Codex profile and credentials; the workflow does not copy keys or login files or modify the official extension. On the first install, enable Developer mode at `chrome://extensions` and choose the reported directory. Model, reasoning, and speed-tier choices come from the live app-server catalog.
+
+Use the following commands for service status and an RPC smoke test that does not request a model response. `-TurnSmoke` additionally sends a real model request. Passing the RPC test does not verify that the Chrome sidebar was loaded or rendered; load the unpacked extension and check the panel in Chrome.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\start-codex-work-app-server.ps1" -Action Status
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\test-codex-work-bridge.ps1"
+```
 
 Append `-OpenChromeExtensions` when the script should open the extensions settings page automatically. It does not install or modify the official extension; the normal directory-selection click is still required.
 

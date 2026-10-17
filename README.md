@@ -79,7 +79,14 @@ Claude Code 可将目标改为 `$env:USERPROFILE\.claude\skills\codex-windows-fa
 powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\install-codex-work-extension.ps1"
 ```
 
-脚本不修改官方扩展、浏览器资料、`auth.json` 或 `config.toml`，会在 D: 下启动 loopback app-server 并生成独立扩展目录。首次安装时在 `chrome://extensions` 开启开发者模式，选择脚本输出的目录加载未打包扩展。此侧栏直接使用桌面 Codex 的 provider、模型、推理和 Default/Fast/Ultrafast 档位，不需要再次登录 `chatgpt.com`。
+脚本不修改官方扩展、浏览器资料、`auth.json` 或 `config.toml`，会在 D: 下生成独立扩展目录并启动本地中继。官方 Work 页是依赖 ChatGPT 网页会话的 iframe，不能直接继承桌面 Codex 的第三方 API 配置；这个独立侧栏通过固定的扩展 Origin 和 `codex-jsonrpc-v1` 子协议连接仅监听 `127.0.0.1` 的中继，再由中继以 stdio 启动当前 Windows 用户的 `codex app-server`。app-server 使用该用户已有的桌面 Codex 配置和凭据，不复制密钥或登录文件，也不改官方扩展。首次安装时在 `chrome://extensions` 开启开发者模式，选择脚本输出的目录加载未打包扩展。侧栏的模型、推理和速度档位由 app-server 实际返回。
+
+可用下面的命令检查服务并执行不发起模型回复的 RPC 冒烟测试；`-TurnSmoke` 会额外发送一次真实模型请求。RPC 通过不代表 Chrome 侧栏已完成 UI 验收，仍需在 Chrome 中加载扩展并确认侧栏正常显示。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\start-codex-work-app-server.ps1" -Action Status
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\test-codex-work-bridge.ps1"
+```
 
 需要自动打开加载页面时，可在命令末尾加 `-OpenChromeExtensions`；它不会自动安装或修改官方扩展，仍需在 Chrome 中正常选择目录。
 
