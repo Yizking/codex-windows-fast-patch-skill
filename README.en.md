@@ -36,7 +36,7 @@ This community-maintained **Agent Skill** contains diagnostic workflows and repa
 | --- | --- |
 | **Missing models or speed controls** | Fast Mode, hidden existing model entries, the Power slider, and the Ultra toggle |
 | **UI or plugin issues** | Language resets, missing Goal entries, unavailable marketplaces or install buttons |
-| **Unavailable browser access** | In-app browser, Chrome control, and specific authentication-dependency errors with custom providers |
+| **Unavailable browser access** | In-app browser, Chrome control, specific authentication-dependency errors with custom providers, and a local Work sidebar that follows the Desktop provider |
 | **Computer-control failures** | Computer Use / Any App, cross-call window operations, and some Windows 10 screenshot failures |
 | **Broken phone remote control** | Missing entry points, QR codes, pairing, or expired-version errors while retaining third-party API use |
 | **Conversation failures** | New-chat `inputSchema` errors, history hidden after provider changes, and missing working directories after recovery |
@@ -71,6 +71,18 @@ configuration and conversations, run background verification, and clean up tempo
 ```
 
 Verification defaults to background read-only checks. It does not automatically open Calculator or another test app, change native-window focus, or inject mouse/keyboard input. Runtime, plugin, and window-enumeration results are reported separately. Live native screenshot/input tests run only when explicitly requested or authorized, and untested operations are identified as such.
+
+### Chrome Work and the Desktop provider
+
+The current official extension implements Work as a `chatgpt.com` web-session iframe. It cannot inherit a third-party provider from Desktop `config.toml`. When the sidebar only shows a ChatGPT login or does not show the Desktop model/credit path, stage the local compatibility sidebar:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\install-codex-work-extension.ps1"
+```
+
+The script leaves the official extension, browser profile, `auth.json`, and `config.toml` untouched. It starts a loopback app-server and writes a separate unpacked extension under the D: drive. On the first install, enable Developer mode at `chrome://extensions` and choose the reported directory. The local sidebar uses the Desktop provider, model catalog, reasoning options, and Default/Fast/Ultrafast tiers without a second `chatgpt.com` login.
+
+Append `-OpenChromeExtensions` when the script should open the extensions settings page automatically. It does not install or modify the official extension; the normal directory-selection click is still required.
 
 **Request phone remote control separately:**
 
@@ -116,6 +128,7 @@ Reinstallation depends on the cause of the problem, not simply on using this ski
 | Language resets or broken client-side Goal / plugin / browser / Any App entry points | Patch the client and reinstall |
 | Phone entry, pairing, or version issues; new-chat `inputSchema` errors | Reinstall when the client or native program needs changes |
 | Chrome / Computer Use caches, runtime paths, marketplace configuration, or supported Chrome authentication-dependency errors | Usually repair the local environment without reinstalling |
+| Chrome Work sidebar following a third-party Desktop provider | Local app-server plus a separate unpacked extension; no Desktop reinstall or official-extension edits |
 | Model-catalog entries, history visibility, missing working directories, backups, Tinghuashui configuration, or post-pairing API addresses | Usually change configuration or data without reinstalling |
 
 The same visible symptom, such as an unavailable browser or a missing model, may come from configuration or cache problems. Let the diagnosis determine the repair.

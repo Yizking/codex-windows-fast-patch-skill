@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Codex Desktop Work",
+  "version": "0.1.0",
+  "description": "Use the local Codex Desktop app-server and its configured model provider.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:43123/*",
+    "http://localhost:43123/*"
+  ],
+  "action": {
+    "default_title": "Codex Desktop Work"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'self' ws://127.0.0.1:43123 ws://localhost:43123 http://127.0.0.1:43123 http://localhost:43123;"
+  }
+}

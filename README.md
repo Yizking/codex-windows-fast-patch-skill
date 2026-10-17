@@ -36,7 +36,7 @@
 | --- | --- |
 | **模型与速度选项缺失** | Fast Mode、被隐藏的已有模型、Power 拖动条、Ultra 开关 |
 | **界面与插件异常** | 语言重置、Goal 等入口消失、插件市场与安装按钮不可用 |
-| **浏览器不可用** | 内置浏览器、Chrome 控制、自定义供应商下特定的登录依赖错误 |
+| **浏览器不可用** | 内置浏览器、Chrome 控制、自定义供应商下特定的登录依赖错误；Work 侧栏可通过本地 app-server 跟随桌面 provider |
 | **电脑操控异常** | Computer Use / Any App、跨调用窗口操作、部分 Win10 截图故障 |
 | **手机远控失效** | 入口、二维码、配对和版本过期问题，保留第三方 API 主使用方式 |
 | **会话异常** | 新建对话 `inputSchema` 报错、切换供应商后历史消失、恢复后目录缺失 |
@@ -70,6 +70,18 @@ Claude Code 可将目标改为 `$env:USERPROFILE\.claude\skills\codex-windows-fa
 ```
 
 默认采用后台只读验收，不自动打开计算器等测试应用，不切换原生窗口焦点或发送鼠标键盘输入。运行时、插件、窗口枚举等检查会分别报告；真实截图和原生输入测试仅在你明确要求或同意后执行，未执行时会如实注明。
+
+### Chrome Work 与桌面 provider
+
+新版官方扩展的 Work 模式是 `chatgpt.com` 网页会话，要求 ChatGPT 网页登录，不能直接继承桌面版 `config.toml` 中的第三方 provider。遇到侧栏只显示登录、没有桌面模型或额度时，使用本地兼容侧栏：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$SkillRoot\scripts\install-codex-work-extension.ps1"
+```
+
+脚本不修改官方扩展、浏览器资料、`auth.json` 或 `config.toml`，会在 D: 下启动 loopback app-server 并生成独立扩展目录。首次安装时在 `chrome://extensions` 开启开发者模式，选择脚本输出的目录加载未打包扩展。此侧栏直接使用桌面 Codex 的 provider、模型、推理和 Default/Fast/Ultrafast 档位，不需要再次登录 `chatgpt.com`。
+
+需要自动打开加载页面时，可在命令末尾加 `-OpenChromeExtensions`；它不会自动安装或修改官方扩展，仍需在 Chrome 中正常选择目录。
 
 **需要手机远控时单独提出：**
 
@@ -115,6 +127,7 @@ git -C $SkillRoot pull --ff-only
 | 语言重置、Goal / 插件 / 浏览器 / Any App 的客户端入口异常 | 修改客户端后重新安装 |
 | 手机远控的入口、配对或版本问题，新建对话 `inputSchema` 报错 | 需要修改客户端或原生程序时重新安装 |
 | Chrome / Computer Use 的缓存、运行时路径、市场配置，以及已支持的 Chrome 登录依赖错误 | 通常只修本地环境，不重装 |
+| Chrome Work 侧栏跟随桌面第三方 provider | 使用本地 app-server 和独立未打包扩展，不重装 Codex，不改官方扩展 |
 | 模型目录补全、历史会话可见性、缺失工作目录、备份与听话水配置、配对后的 API 地址 | 通常只改配置或数据，不重装 |
 
 同样是“浏览器不能用”或“模型不显示”，也可能只是缓存或配置问题，以实际检查结果为准。

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Desktop Work</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">CODEX DESKTOP</div>
+        <h1>Work</h1>
+      </div>
+      <div class="connection" id="connection" data-state="offline">
+        <span class="dot"></span>
+        <span id="connection-label">Offline</span>
+      </div>
+    </header>
+
+    <nav class="mode-tabs" aria-label="Mode">
+      <button class="mode-tab" type="button" data-mode="chat">Chat</button>
+      <button class="mode-tab active" type="button" data-mode="work">Work</button>
+    </nav>
+
+    <section class="provider-strip" aria-live="polite">
+      <div>
+        <span class="label">Desktop provider</span>
+        <strong id="provider-label">Connecting...</strong>
+      </div>
+      <button class="icon-button" id="new-thread" type="button" title="New thread" aria-label="New thread">+</button>
+    </section>
+
+    <section class="controls" aria-label="Model controls">
+      <label>
+        <span>Model</span>
+        <select id="model"></select>
+      </label>
+      <label>
+        <span>Reasoning</span>
+        <select id="reasoning">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="xhigh">XHigh</option>
+          <option value="max">Max</option>
+          <option value="ultra">Ultra</option>
+        </select>
+      </label>
+      <label>
+        <span>Speed</span>
+        <select id="speed">
+          <option value="default">Default</option>
+          <option value="priority">Fast</option>
+          <option value="ultrafast">Ultrafast</option>
+        </select>
+      </label>
+    </section>
+
+    <label class="workspace">
+      <span>Working directory <small>(optional)</small></span>
+      <input id="cwd" type="text" placeholder="Use the desktop default">
+    </label>
+
+    <section class="messages" id="messages" aria-live="polite" aria-label="Conversation">
+      <div class="empty" id="empty-state">
+        <div class="empty-mark">C</div>
+        <strong>Ready for desktop work</strong>
+        <span>Requests use the provider configured in Codex Desktop.</span>
+      </div>
+    </section>
+
+    <div class="status-line" id="status-line" role="status"></div>
+
+    <form class="composer" id="composer">
+      <textarea id="prompt" rows="3" placeholder="Ask Codex to work on this..." required></textarea>
+      <div class="composer-footer">
+        <label class="context-toggle">
+          <input id="tab-context" type="checkbox">
+          <span>Include active tab</span>
+        </label>
+        <div class="composer-actions">
+          <button class="stop-button" id="stop" type="button" hidden>Stop</button>
+          <button class="send-button" id="send" type="submit">Send</button>
+        </div>
+      </div>
+    </form>
+  </main>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
