@@ -130,6 +130,7 @@ if ($ResumePreparedBuild) {
   Write-Host "Recovery and build root: $outputRoot"
 }
 Write-Host "Transcript: $transcriptPath"
+Write-Host "Deployment state (written after installer identity checks): $transcriptPath.state.json"
 Write-Host 'The external installer will request normal Windows UAC consent. No task-scheduler or policy bypass is used.'
 
 if ($PSCmdlet.ShouldProcess($package.PackageFullName, 'Start independent elevated recoverable Model Experience repair')) {

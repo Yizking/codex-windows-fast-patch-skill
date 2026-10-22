@@ -16,9 +16,25 @@ $script:RepairRunRoot = 'D:\CodexData\codex-windows-fast-patch\model-experience-
 $script:RepairLogRoot = 'D:\CodexData\codex-windows-fast-patch\model-experience-repair-logs'
 . (Join-Path $PSScriptRoot 'lib\msix-safe-install.ps1')
 . (Join-Path $PSScriptRoot 'lib\msix-payload.ps1')
+. (Join-Path $PSScriptRoot 'lib\repair-deployment-state.ps1')
 $patcher = Join-Path $PSScriptRoot 'patch_codex_fast_mode_windows_msix.ps1'
 $script:TranscriptStarted = $false
 $repairTempParent = 'D:\CodexData\cwp-tmp'
+$script:RepairDeploymentState = $null
+$script:RepairStatePath = $null
+$script:RepairCheckpointFailed = $false
+
+function Save-RepairCheckpoint {
+  param([switch]$AfterDeployment)
+  try {
+    Write-RepairDeploymentState -Path $script:RepairStatePath -State $script:RepairDeploymentState
+  } catch {
+    if (-not $AfterDeployment) { throw }
+    # State I/O must not turn a successful deployment into a rollback or a reported install failure.
+    $script:RepairCheckpointFailed = $true
+    Write-Log "warning: deployment checkpoint could not be saved; inspect the retained transcript: $($_.Exception.Message)"
+  }
+}
 
 function New-RepairTemporaryRoot {
   $drive = [IO.DriveInfo]::new('D:\')
@@ -686,6 +702,12 @@ try {
   Assert-MsixExternalExecutor $package
   Write-Log "installer identity verified: $identity"
   Write-Log "source package verified: $($package.PackageFullName)"
+  $script:RepairStatePath = $transcriptFullPath + '.state.json'
+  if (Test-Path -LiteralPath $script:RepairStatePath) { throw 'Deployment state already exists; refusing to overwrite another attempt.' }
+  $script:RepairDeploymentState = New-RepairDeploymentState -SourcePackage $package -InstallerProcess (Get-Process -Id $PID) `
+    -UserSid $identitySid -SessionId $sessionId -OutputRoot $resolvedOutputRoot -TranscriptPath $transcriptFullPath
+  Save-RepairCheckpoint
+  Write-Log "deployment state: $script:RepairStatePath"
 
   if (-not $ResumePreparedBuild) {
     New-Item -ItemType Directory -Force -Path $resolvedOutputRoot | Out-Null
@@ -810,8 +832,14 @@ try {
   Write-Log 'both package deployment preflights passed before application shutdown'
 
   $cliPath = Get-CodexCli
+  $script:RepairDeploymentState.recoveryPackageFullName = ([string]$package.PackageFullName).Replace("_$($package.Version)_", "_${recoveryVersion}_")
+  $script:RepairDeploymentState.stage = 'deploying'
+  # Fail closed here: the next call can shut down Desktop.
+  Save-RepairCheckpoint
   $validateInstalled = {
     param($installed)
+    $script:RepairDeploymentState.stage = if ($installed.PackageFullName -ceq $script:RepairDeploymentState.targetPackageFullName) { 'verifying' } else { 'recovering' }
+    Save-RepairCheckpoint -AfterDeployment
     Start-AndValidateCodex -Package $installed -PatchedVersion $patchedInfo.Version -CliPath $cliPath
   }
   $outcome = Invoke-RecoverableMsixInstall -MsixPath $patchedMsix -RecoveryMsixPath $recoveryMsix -ValidateInstalledPackage $validateInstalled -PackageName 'OpenAI.Codex'
@@ -823,7 +851,13 @@ try {
   }
 
   Write-Log "transactional repair passed: version=$($outcome.Package.Version); original-content recovery was retained until launch and model/list checks passed"
-  if (-not $KeepArtifacts) {
+  $script:RepairDeploymentState.acceptancePassed = $true
+  $script:RepairDeploymentState.verifiedPackageFullName = $outcome.Package.PackageFullName
+  $script:RepairDeploymentState.verifiedUtc = [DateTime]::UtcNow.ToString('o')
+  $script:RepairDeploymentState.stage = 'cleanup-pending'
+  $script:RepairDeploymentState.cleanupStatus = if ($KeepArtifacts) { 'retained-requested' } else { 'pending' }
+  Save-RepairCheckpoint -AfterDeployment
+  if (-not $KeepArtifacts -and -not $script:RepairCheckpointFailed) {
     Remove-RepairTemporaryRoot -Path $tempRoot -SentinelId $tempSentinelId
     Write-Log 'verified short-path temporary workspace removed after successful acceptance'
     $rootItem = Get-Item -LiteralPath $resolvedOutputRoot -Force
@@ -833,10 +867,24 @@ try {
     }
     Remove-DirectoryTreeRobust -Path $resolvedOutputRoot
     Write-Log 'verified temporary build and recovery packages were removed after successful acceptance'
+    $script:RepairDeploymentState.cleanupStatus = 'removed'
+  } elseif ($script:RepairCheckpointFailed) {
+    $script:RepairDeploymentState.cleanupStatus = 'retained-checkpoint-error'
+    Write-Log 'warning: accepted repair artifacts retained because a deployment checkpoint could not be saved'
   }
+  $script:RepairDeploymentState.stage = 'verified-complete'
+  Save-RepairCheckpoint -AfterDeployment
 } catch {
-  $failure = $_
-  Write-Log "failed: $($_.Exception.Message)"
+  if ($script:RepairDeploymentState -and $script:RepairDeploymentState.acceptancePassed) {
+    $script:RepairDeploymentState.stage = 'cleanup-failed'
+    $script:RepairDeploymentState.cleanupStatus = 'failed'
+    Write-Log "warning: repair acceptance passed; cleanup incomplete: $($_.Exception.Message)"
+  } else {
+    $failure = $_
+    if ($script:RepairDeploymentState) { $script:RepairDeploymentState.stage = 'failed' }
+    Write-Log "failed: $($_.Exception.Message)"
+  }
+  if ($script:RepairDeploymentState) { Save-RepairCheckpoint -AfterDeployment }
   if ($tempRoot -and (Test-Path -LiteralPath $tempRoot)) {
     Write-Log "temporary workspace retained for diagnosis: $tempRoot"
   }
