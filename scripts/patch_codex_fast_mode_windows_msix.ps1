@@ -1563,18 +1563,29 @@ function patchFeatureHook(file) {
   // WSL read, and the derived availability vars no longer sit in one let chain.
   // Match the two split declarations by their stable neighbor expressions and
   // force the WSL availability result separately.
-  const inAppConfigV3OriginalRe = /let ([A-Za-z_$][\w$]*)=[A-Za-z_$][\w$]*\([A-Za-z_$][\w$]*\)(,[A-Za-z_$][\w$]*=[A-Za-z_$][\w$]*\([A-Za-z_$][\w$]*\),([A-Za-z_$][\w$]*)=[A-Za-z_$][\w$]*\?\.authMethod\?\?null,([A-Za-z_$][\w$]*);)/;
-  const externalConfigV3OriginalRe = /let ([A-Za-z_$][\w$]*)=[A-Za-z_$][\w$]*\([A-Za-z_$][\w$]*\)(,[A-Za-z_$][\w$]*=[A-Za-z_$][\w$]*\([A-Za-z_$][\w$]*\),([A-Za-z_$][\w$]*)=[A-Za-z_$][\w$]*\|\|[A-Za-z_$][\w$]*===`chrome-extension`,)/;
+  // Bind split config reads to the exact options local carrying the browser
+  // feature. A global authMethod-shaped match can hit computer_use first in
+  // app-initial and require another run before the real browser hook changes.
+  const v3Id = '[A-Za-z_$][\\w$]*';
+  const v3Prefix = feature => '(?<prefix>(?<options>' + v3Id + ')=\\{enabled:' + v3Id + ',featureName:`' + feature + '`,hostId:' + v3Id + '\\}[^;]{0,160};let )(?<config>' + v3Id + ')=';
+  const inAppV3Tail = '(?<tail>,(?<auth>' + v3Id + ')=' + v3Id + '\\(' + v3Id + '\\),' + v3Id + '=\\k<auth>\\?\\.authMethod\\?\\?null,' + v3Id + ';)';
+  const externalV3Tail = '(?<tail>,' + v3Id + '=' + v3Id + '\\(' + v3Id + '\\),' + v3Id + '=' + v3Id + '\\|\\|' + v3Id + '===`chrome-extension`,)';
+  const inAppConfigV3OriginalRe = new RegExp(v3Prefix('browser_use') + v3Id + '\\(\\k<options>\\)' + inAppV3Tail);
+  const externalConfigV3OriginalRe = new RegExp(v3Prefix('browser_use_external') + v3Id + '\\(\\k<options>\\)' + externalV3Tail);
+  const inAppConfigV3PatchedRe = new RegExp(v3Prefix('browser_use') + '\\{enabled:!0,isLoading:!1\\}/\\*CODEX_BROWSER_IN_APP_CONFIG_V3\\*/' + inAppV3Tail);
+  const externalConfigV3PatchedRe = new RegExp(v3Prefix('browser_use_external') + '\\{enabled:!0,isLoading:!1\\}/\\*CODEX_BROWSER_EXTERNAL_CONFIG_V3\\*/' + externalV3Tail);
+  for (const pair of [[inAppConfigV3OriginalRe, inAppConfigV3PatchedRe], [externalConfigV3OriginalRe, externalConfigV3PatchedRe]]) {
+    if (pair.reduce((count, re) => count + [...before.matchAll(new RegExp(re.source, 'g'))].length, 0) > 1) {
+      process.stderr.write('browser-use-split-config-ambiguous\n'); process.exit(2);
+    }
+  }
   const wslResultV3Re = /([A-Za-z_$][\w$]*)=[A-Za-z_$][\w$]*===!0\|\|[A-Za-z_$][\w$]*\.kind===`wsl`/g;
-  const v3ConfigPatched = before.includes('/*CODEX_BROWSER_IN_APP_CONFIG_V3*/') &&
-                          before.includes('/*CODEX_BROWSER_EXTERNAL_CONFIG_V3*/');
-  const v3ConfigOriginal = inAppConfigV3OriginalRe.test(before) &&
-                           externalConfigV3OriginalRe.test(before);
+  const v3ConfigPatched = inAppConfigV3PatchedRe.test(before) && externalConfigV3PatchedRe.test(before);
   if (hasCurrentCompiledShape && (
       !(currentInAppPairOriginalRe.test(before) || currentInAppPairPatchedRe.test(before)) ||
-      !((currentInAppConfigOriginalRe.test(before) || currentInAppConfigPatchedRe.test(before)) || v3ConfigOriginal || v3ConfigPatched) ||
+      !((currentInAppConfigOriginalRe.test(before) || currentInAppConfigPatchedRe.test(before)) || inAppConfigV3OriginalRe.test(before) || inAppConfigV3PatchedRe.test(before)) ||
       !(currentExternalGateOriginalRe.test(before) || currentExternalGatePatchedRe.test(before)) ||
-      !((currentExternalConfigOriginalRe.test(before) || currentExternalConfigPatchedRe.test(before)) || v3ConfigOriginal || v3ConfigPatched))) {
+      !((currentExternalConfigOriginalRe.test(before) || currentExternalConfigPatchedRe.test(before)) || externalConfigV3OriginalRe.test(before) || externalConfigV3PatchedRe.test(before)))) {
     process.stderr.write('browser-use-current-feature-hook-incomplete\n');
     process.exit(2);
   }
@@ -1599,11 +1610,11 @@ function patchFeatureHook(file) {
     );
     after = after.replace(
       inAppConfigV3OriginalRe,
-      'let $1={enabled:!0,isLoading:!1}/*CODEX_BROWSER_IN_APP_CONFIG_V3*/$2'
+      '$<prefix>$<config>={enabled:!0,isLoading:!1}/*CODEX_BROWSER_IN_APP_CONFIG_V3*/$<tail>'
     );
     after = after.replace(
       externalConfigV3OriginalRe,
-      'let $1={enabled:!0,isLoading:!1}/*CODEX_BROWSER_EXTERNAL_CONFIG_V3*/$2'
+      '$<prefix>$<config>={enabled:!0,isLoading:!1}/*CODEX_BROWSER_EXTERNAL_CONFIG_V3*/$<tail>'
     );
     after = after.replace(
       wslResultV3Re,

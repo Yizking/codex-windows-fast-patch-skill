@@ -768,6 +768,32 @@ Run `scripts/test-service-tier-access-patterns.ps1 -TemporaryRoot <D-drive-test-
 
 Desktop `26.1016.6573.0` and `26.1016.8120.0` add `amazonBedrock` as a third recognized authentication mode in both complete service-tier access conditions. The request matcher accepts that optional third comparison only for the same auth local, and the UI matcher accepts either complete two- or three-mode condition followed by the assignment delimiter. Unknown extra conditions, mismatched locals, mixed targets and partial markers are rejected. The shared requirements converter, independent Fast/Ultrafast restrictions, cache arguments and React loading/memo behavior remain unchanged. Run the same two regression suites with the current unmodified asset before the full package dry run.
 
+## Post-update checks and browser split-config targeting
+
+For subsequent updates, use the repository's `scripts/codex-after-update.ps1`
+to distinguish an unverified replacement package from plugin version drift or
+pending acceptance. `-CheckApp` diagnoses the current complete non-phone bundle;
+repair switches are explicit. The launcher resolves models from active
+model/list rather than reverting to old hard-coded model names. See
+`references/post-update-verification.md` for the status contract.
+
+### Browser split-config patch hits a neighboring Computer Use hook
+
+On the installed `26.1023.6621.1` merged app-initial asset, the earlier V3
+in-app config regex matched Computer Use's preceding authMethod-shaped local
+declaration. A browser config marker existed there while the actual browser
+hook still read its original config; another patch run then changed the real
+browser hook. Marker presence and first-run `patched` were therefore insufficient
+to prove a complete, stable browser patch.
+
+The V3 match now binds `featureName:browser_use` or `browser_use_external` to
+its exact options local and corresponding config call. Scoped duplicates and
+mismatched locals are rejected; a historical marker in a neighboring function
+does not hide the missing browser target. Browser hook tests include that
+neighbor unchanged, both configs repaired in one pass, repeat-run stability,
+duplicates, mismatched locals and the exact installed asset. This is a source
+and static-asset improvement; it does not claim a new Desktop deployment.
+
 ## Native Desktop 26.1023 hides Ultra after model/list
 
 On Store package `26.1023.6621.0`, the catalog and `model/list` can advertise

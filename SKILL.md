@@ -65,6 +65,18 @@ Do not proceed with a config write if the backup of an existing config fails. Th
 
 ## Workflow Selection
 
+For recurring update regressions, prefer the repository's
+`scripts/codex-after-update.ps1`: default mode checks the exact package's repair
+transaction, live models and strict plugin/runtime contracts; `-CheckApp` runs a
+complete package dry run in disposable scratch space. A passing plugin check
+without accepted current-package evidence is `app-check-needed`, not app health.
+`-RepairPlugins -RepairApp` is an explicit repair path, never a watcher. Resume
+pending acceptance rather than deploying again, and reject unknown layouts or
+installer state before launch. Do not schedule or automatically invoke it unless
+the user requests that behavior. The recoverable launcher resolves default
+CustomModels from live model/list; explicit CustomModels remain available when
+the CLI cannot load the catalog. Never fabricate reasoning or service tiers.
+
 Before choosing the full MSIX repack path, identify whether the current failure is a Desktop bundle gate or a local plugin/runtime repair. Do not treat a vague "Chrome/Computer Use is unavailable" report as enough evidence to run the full repatch.
 
 For a missing dots entry, read [dots diagnostics](references/dots-diagnostics.md) first and use `scripts\diagnose-dots.py` for read-only package inspection. The cloud agent requires separate ChatGPT account/workspace access; route presence and a custom model provider do not establish that access. This is diagnostic support, not a dots unlock or a default MSIX patch.
