@@ -768,6 +768,65 @@ Run `scripts/test-service-tier-access-patterns.ps1 -TemporaryRoot <D-drive-test-
 
 Desktop `26.1016.6573.0` and `26.1016.8120.0` add `amazonBedrock` as a third recognized authentication mode in both complete service-tier access conditions. The request matcher accepts that optional third comparison only for the same auth local, and the UI matcher accepts either complete two- or three-mode condition followed by the assignment delimiter. Unknown extra conditions, mismatched locals, mixed targets and partial markers are rejected. The shared requirements converter, independent Fast/Ultrafast restrictions, cache arguments and React loading/memo behavior remain unchanged. Run the same two regression suites with the current unmodified asset before the full package dry run.
 
+## Native Desktop 26.1023 hides Ultra after model/list
+
+On Store package `26.1023.6621.0`, the catalog and `model/list` can advertise
+`ultra`, `priority`, and `ultrafast` while Desktop hides those controls. Fast
+still needs the request/UI authentication repair. Native Ultra no longer uses
+the historical account-settings slider hook: the model query in `app-initial`
+and the host capability initialization separately consult gate `1186680773`.
+
+The native Ultra patch recognizes both complete call sites before writing. For
+custom providers only, it admits the catalog's Ultra capability while preserving
+the caller's include-Ultra value, enabled reasoning efforts, model capabilities,
+and the official provider gate. Both sites must be pristine or both patched;
+duplicates, unknown conditions, missing peers and partial markers are rejected.
+Run `scripts/test-native-ultra-reasoning.ps1 -TemporaryRoot <local-test-root>
+-CurrentAssetsDir <original-assets-directory>` and a full dry run. Successful
+fixture and syntax checks are separate from installed Desktop acceptance.
+
+The local `26.1023.6621.0 -> 26.1023.6621.1` deployment completed with
+`verified-complete`: exact-package Desktop window launch, installed ASAR
+integrity, both native Ultra markers, default `gpt-6.1-sol` model/list tiers
+`priority,ultrafast`, and a captured request containing `service_tier=priority`.
+All eight publishable bundled plugins passed strict version/runtime checks;
+fresh Desktop native enumeration returned four windows, and Chrome plus the
+in-app browser read public HTTPS page titles and meaningful AX content. The
+persisted locale was `zh-CN`. Mode/language menus were not directly operated or
+visually checked; native screenshot/input and upstream Ultrafast scheduling
+were not exercised. Successful-run build/recovery artifacts were removed after
+acceptance, with configuration backups and logs retained.
+
+## Recoverable preparation fails on a harmless npm warning
+
+Under Windows PowerShell 5.1, capturing a patcher with `2>&1` while
+`ErrorActionPreference=Stop` can convert `npm warn deprecated asar@3.2.0` into
+a terminating error before any deployment. The recoverable runner prepares the
+package in a hidden independent PowerShell process with separate stdout/stderr
+files and checks its actual exit code. `test-package-preparation-transport.ps1`
+verifies warning preservation, nonzero exit rejection, arrays, booleans and
+paths. Model-list probe transport and post-install runtime refresh reuse the
+reviewed upstream PR #112 behavior; that PR's unrelated Edge changes are not
+required for this local Chrome setup.
+
+## Store update leaves old reserved marketplace and installed plugin versions
+
+The stable mirror can match a new package while Desktop's actual
+`.tmp/bundled-marketplaces/openai-bundled` descriptors and CLI installed version
+records still refer to the preceding build. On `26.1023.6621.0` this mixed
+`26.1023.50603` and `26.1023.51421`, left unified Computer Use referencing a
+removed runtime, and caused full plugin verification to fail.
+
+The local repair synchronizes only already published, publishable reserved
+mirror entries from the installed package, with backups. It then upgrades only
+already installed stale plugin records. A disabled plugin remains disabled,
+including when registration fails; unrelated TOML keys are preserved and
+optional plugins are not installed. Require `test-bundled-plugin-upgrade-repair.ps1`,
+`test-bundled-plugin-version-drift.ps1`, and a post-restart
+`-StrictVerifyOnly -VerifyAllBundledPluginsAvailable` pass. The mirror inventory,
+CLI records, runtime initialization, and actual Desktop browser/native readiness
+are distinct acceptance checks.
+
 ## Model Picker Shows Only One Fast Level (Missing Ultrafast Tier)
 
 Symptoms:

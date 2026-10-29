@@ -717,6 +717,14 @@ function Find-UltraSliderTarget {
       return $candidate
     }
   }
+  $nativeCandidates = @((Invoke-RgList $RgPath '1186680773' $AssetsDir) | Where-Object {
+    $nativeText = Get-Content -Raw -LiteralPath $_
+    $nativeText.Contains('includeUltraReasoningEffort:') -and
+      $nativeText.Contains('isCustomModelProvider:') -and
+      $nativeText.Contains('hasModelSupportingUltraReasoningEffort:')
+  })
+  if ($nativeCandidates.Count -gt 1) { Fail 'ambiguous native Ultra reasoning targets' }
+  if ($nativeCandidates.Count -eq 1) { return $nativeCandidates[0] }
   return $null
 }
 
@@ -1053,6 +1061,61 @@ if (!file || file === '__none__') {
 }
 
 const text = fs.readFileSync(file, 'utf8');
+// Native 26.1023 no longer uses the account-settings Ultra slider hook.
+// Keep the official gate for normal providers; custom providers use only the
+// reasoning efforts advertised by their catalog and enabled by user settings.
+if (text.includes('hasModelSupportingUltraReasoningEffort:') && text.includes('1186680773')) {
+  const path = require('node:path');
+  const { spawnSync } = require('node:child_process');
+  const queryMarker = 'CODEX_NATIVE_ULTRA_QUERY_V1';
+  const hostMarker = 'CODEX_NATIVE_ULTRA_HOST_V1';
+  const fail = reason => { process.stderr.write(reason + '\n'); process.exit(2); };
+  const id = '([$A-Za-z_][$\\w]*)';
+  const headRe = new RegExp('\\(\\{additionalAvailableModels:' + id + ',authMethod:' + id + ',enabledReasoningEfforts:' + id + ',hasConfiguredModelCatalog:' + id + ',hostId:' + id + ',includeUltraReasoningEffort:' + id + ',isCustomModelProvider:' + id + ',limit:' + id + ',modelCatalogPath:' + id + ',modelProvider:' + id + ',teamCatalog:' + id + '\\},\\{get:' + id + ',queryClient:' + id + ',scope:' + id + '\\}\\)=>\\{', 'g');
+  const heads = [...text.matchAll(headRe)];
+  if (heads.length !== 1) fail('native-ultra-query-head-ambiguous');
+  const head = heads[0], include = head[6], custom = head[7], get = head[12];
+  const escape = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tailIndex = text.indexOf(';return{queryKey:', head.index + head[0].length);
+  if (tailIndex < 0 || tailIndex - head.index > 2400) fail('native-ultra-query-body-unknown');
+  const body = text.slice(head.index + head[0].length, tailIndex);
+  const gate = escape(get) + '\\(' + id + ',`1186680773`\\)';
+  const originalRe = new RegExp(',' + id + '=' + escape(include) + '&&' + gate + '$');
+  const patchedRe = new RegExp(',' + id + '=' + escape(include) + '&&\\(' + escape(custom) + '\\|\\|' + gate + '\\)/\\*' + queryMarker + '\\*/$');
+  const original = body.match(originalRe), patched = body.match(patchedRe);
+  const queryDone = patched != null && text.split(queryMarker).length === 2;
+  if (!original && !queryDone) fail('native-ultra-query-gate-unknown');
+  if (original && text.includes(queryMarker)) fail('native-ultra-query-partial-marker');
+  const bootstrapFiles = fs.readdirSync(path.dirname(file)).filter(name => /^initialize-app-host-services-.*\.js$/.test(name));
+  if (bootstrapFiles.length !== 1) fail('native-ultra-bootstrap-ambiguous');
+  const hostFile = path.join(path.dirname(file), bootstrapFiles[0]);
+  const host = fs.readFileSync(hostFile, 'utf8');
+  const hosts = [...host.matchAll(/includeUltraReasoningEffort:(.{1,220}?),isAuthLoading:/g)].filter(match => match[1].includes('1186680773'));
+  if (hosts.length !== 1) fail('native-ultra-bootstrap-gate-ambiguous');
+  const hostMatch = hosts[0];
+  const hostTail = host.slice(hostMatch.index + hostMatch[0].length, hostMatch.index + hostMatch[0].length + 650);
+  const customMatch = hostTail.match(/isCustomModelProvider:([$A-Za-z_][$\w]*)\(([$A-Za-z_][$\w]*)\),workspaceDependenciesEnabled:/);
+  if (!customMatch) fail('native-ultra-bootstrap-provider-unknown');
+  const customCall = customMatch[1] + '(' + customMatch[2] + ')';
+  const hostOriginal = new RegExp('^' + id + '\\(' + id + ',`1186680773`\\)$');
+  const hostPatched = new RegExp('^' + escape(customCall) + '\\|\\|' + id + '\\(' + id + ',`1186680773`\\)/\\*' + hostMarker + '\\*/$');
+  const hostDone = hostPatched.test(hostMatch[1]) && host.split(hostMarker).length === 2;
+  if (!hostOriginal.test(hostMatch[1]) && !hostDone) fail('native-ultra-bootstrap-gate-unknown');
+  if (host.includes(hostMarker) && !hostDone) fail('native-ultra-bootstrap-partial-marker');
+  if (queryDone !== hostDone) fail('native-ultra-mixed-patch-state');
+  if (queryDone) { process.stdout.write('already-patched'); process.exit(0); }
+  const nextBody = body.replace(originalRe, ',' + original[1] + '=' + include + '&&(' + custom + '||' + get + '(' + original[2] + ',`1186680773`))/*' + queryMarker + '*/');
+  const nextQuery = text.slice(0, head.index + head[0].length) + nextBody + text.slice(tailIndex);
+  const nextHost = host.slice(0, hostMatch.index) + hostMatch[0].replace(hostMatch[1], customCall + '||' + hostMatch[1] + '/*' + hostMarker + '*/') + host.slice(hostMatch.index + hostMatch[0].length);
+  for (const source of [nextQuery, nextHost]) {
+    const check = spawnSync(process.execPath, ['--check', '--input-type=module'], { input: source, encoding: 'utf8', maxBuffer: 1024 * 1024 });
+    if (check.status !== 0) fail('native-ultra-output-syntax-invalid');
+  }
+  fs.writeFileSync(file, nextQuery);
+  fs.writeFileSync(hostFile, nextHost);
+  process.stdout.write('patched');
+  process.exit(0);
+}
 if (text.includes(marker) && text.includes(migrationMarker) && text.includes('ultraEffortLocalFallback')) {
   process.stdout.write('already-patched');
   process.exit(0);
